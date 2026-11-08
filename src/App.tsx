@@ -51,7 +51,6 @@ import {
   createSubmittedDocumentItem,
   getDefaultSubmittedDocuments,
   filterServicesBySearchQuery,
-  OFFICIAL_WEBSITE_URL,
 } from './utils/loanCalculator';
 import { MBMonogramLogo, ShopVisualShowcase } from './components/BrandVisuals';
 import { LoanCalculator } from './components/LoanCalculator';
@@ -90,6 +89,7 @@ import {
   syncCustomServicesWithBackend,
   syncAnnouncementWithBackend,
   fetchAnnouncementFromBackend,
+  submitEnquiryToBackend,
 } from './utils/cloudIntegrations';
 
 const STORAGE_KEY_USER_SESSION = 'mbee_user_session_v1';
@@ -263,7 +263,7 @@ export default function App() {
       // ignore
     }
 
-    setAdminDispatchPayload({
+    const dispatchPayload: AdminNotificationPayload = {
       userName: session.name,
       userMobile: session.mobile || 'Google Verified Client',
       userCity: session.city,
@@ -272,7 +272,9 @@ export default function App() {
       serviceName: serviceTitle,
       workDescription,
       referenceCode: refCode,
-    });
+    };
+    void submitEnquiryToBackend(dispatchPayload);
+    setAdminDispatchPayload(dispatchPayload);
   };
 
   const handleSignInSuccess = (
@@ -291,6 +293,7 @@ export default function App() {
       setPendingServiceClick(null);
       dispatchWorkForUser(session, targetSrv);
     } else if (initialWorkRequest) {
+      void submitEnquiryToBackend(initialWorkRequest);
       setAdminDispatchPayload(initialWorkRequest);
     }
   };
@@ -393,7 +396,7 @@ export default function App() {
     if (page !== activePage) {
       setPageHistory((prev) => [...prev, activePage]);
       try {
-        window.history.pushState({ page }, '', `/${OFFICIAL_WEBSITE_URL}#${page}`);
+        window.history.pushState({ page }, '', `#${page}`);
       } catch {
         // ignore history error in restricted iframe
       }
@@ -664,7 +667,10 @@ export default function App() {
           onClose={() => setProfilePopoverOpen(false)}
           onOpenProfilePage={() => navigateToPage('profile')}
           onOpenProfileModal={() => setProfileModalOpen(true)}
-          onDispatchWork={(payload) => setAdminDispatchPayload(payload)}
+          onDispatchWork={(payload) => {
+            void submitEnquiryToBackend(payload);
+            setAdminDispatchPayload(payload);
+          }}
           onSignOut={() => {
             setProfilePopoverOpen(false);
             handleSignOut();
@@ -941,7 +947,10 @@ export default function App() {
             userSession={userSession}
             lang={lang}
             onSaveSession={(updated) => handleUpdateUserProfile(updated)}
-            onDispatchWork={(payload) => setAdminDispatchPayload(payload)}
+            onDispatchWork={(payload) => {
+              void submitEnquiryToBackend(payload);
+              setAdminDispatchPayload(payload);
+            }}
             onSignOut={handleSignOut}
             onExploreServices={() => navigateToPage('services', 'all')}
           />
@@ -1377,7 +1386,10 @@ export default function App() {
           <InsuranceSection
             lang={lang}
             userSession={userSession}
-            onAdminNotify={(payload) => setAdminDispatchPayload(payload)}
+            onAdminNotify={(payload) => {
+              void submitEnquiryToBackend(payload);
+              setAdminDispatchPayload(payload);
+            }}
           />
         )}
 
@@ -1451,7 +1463,10 @@ export default function App() {
         lang={lang}
         onClose={() => setProfileModalOpen(false)}
         onUpdateProfile={handleUpdateUserProfile}
-        onDispatchWork={(payload) => setAdminDispatchPayload(payload)}
+        onDispatchWork={(payload) => {
+          void submitEnquiryToBackend(payload);
+          setAdminDispatchPayload(payload);
+        }}
         onSignOut={handleSignOut}
       />
 

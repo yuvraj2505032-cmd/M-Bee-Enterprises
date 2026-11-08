@@ -54,6 +54,14 @@ import {
   fetchUserProfileFromFirestore,
   saveUserProfileToFirestore,
 } from '../firebase';
+import {
+  syncUserProfileAcrossClouds,
+  syncDocumentsListWithBackend,
+  syncDocumentStatusWithBackend,
+  fetchProfilesFromBackend,
+  fetchEnquiriesFromBackend,
+  BackendEnquiryRecord,
+} from '../utils/cloudIntegrations';
 
 const STORAGE_KEY_SAVED_PROFILES = 'mbee_saved_profiles_v1';
 export const STORAGE_KEY_CUSTOM_SERVICES = 'mbee_custom_services_v1';
@@ -1145,10 +1153,41 @@ export function AdminControlPanelModal({
   const [serviceSuccessMsg, setServiceSuccessMsg] = useState('');
   const [announcementDraft, setAnnouncementDraft] = useState(adminAnnouncement);
   const [announcementSaved, setAnnouncementSaved] = useState(false);
+  const [backendEnquiries, setBackendEnquiries] = useState<BackendEnquiryRecord[]>([]);
+  const [profilesTick, setProfilesTick] = useState(0);
 
   useEffect(() => {
     setAnnouncementDraft(adminAnnouncement);
   }, [adminAnnouncement, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !isUnlocked) return;
+    let active = true;
+    void fetchEnquiriesFromBackend().then((list) => {
+      if (active) setBackendEnquiries(list);
+    });
+    void fetchProfilesFromBackend().then((serverProfiles) => {
+      if (!active || serverProfiles.length === 0) return;
+      for (const sp of serverProfiles) {
+        saveProfileToRegistry({
+          uid: sp.uid,
+          memberId: sp.memberId,
+          name: sp.name,
+          mobile: sp.mobile,
+          email: sp.email,
+          city: sp.city,
+          occupation: sp.occupation,
+          authProvider: sp.authProvider === 'google' ? 'google' : 'mobile',
+          signedInAt: sp.updatedAt,
+          submittedDocuments: sp.submittedDocuments,
+        });
+      }
+      setProfilesTick((t) => t + 1);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, isUnlocked]);
 
   if (!isOpen) return null;
 
@@ -1204,8 +1243,8 @@ export function AdminControlPanelModal({
         pa: docsList.length > 0 ? docsList : ['ਪਛਾਣ ਪੱਤਰ', 'ਚਾਲੂ ਮੋਬਾਈਲ ਨੰਬਰ'],
       },
       turnaroundNote: {
-        en: 'Processed at M Bee Enterprises (Prop. Baljinder Singh), Mahilpur subject to authority guidelines.',
-        pa: 'ਸਬੰਧਤ ਵਿਭਾਗ ਦੇ ਨਿਯਮਾਂ ਅਨੁਸਾਰ ਐਮ ਬੀ ਐਂਟਰਪ੍ਰਾਈਜ਼ਿਜ਼, ਮਾਹਿਲਪੁਰ ਵਿਖੇ ਪ੍ਰਕਿਰਿਆ।',
+        en: 'Processed at M Bee Enterprises (Prop. Baljinder Singh & Manpreet Singh), Mahilpur subject to authority guidelines.',
+        pa: 'ਸਬੰਧਤ ਵਿਭਾਗ ਦੇ ਨਿਯਮਾਂ ਅਨੁਸਾਰ ਐਮ ਬੀ ਐਂਟਰਪ੍ਰਾਈਜ਼ਿਜ਼ (ਬਲਜਿੰਦਰ ਸਿੰਘ ਅਤੇ ਮਨਪ੍ਰੀਤ ਸਿੰਘ), ਮਾਹਿਲਪੁਰ ਵਿਖੇ ਪ੍ਰਕਿਰਿਆ।',
       },
     };
 
@@ -1235,7 +1274,34 @@ export function AdminControlPanelModal({
     setTimeout(() => setAnnouncementSaved(false), 2500);
   };
 
-  const savedProfilesList = Object.values(loadSavedProfiles());
+  const savedProfilesList = (() => {
+    void profilesTick;
+    return Object.values(loadSavedProfiles());
+  })();
+
+  const handleAdminCycleDocStatus = (prof: UserSession, docItem: SubmittedDocumentItem) => {
+    const nextOrder: Record<DocumentStatus, DocumentStatus> = {
+      Pending: 'Processing',
+      Processing: 'Completed',
+      Completed: 'Pending',
+    };
+    const nextStatus = nextOrder[docItem.status] || 'Pending';
+    const nextDocs = (prof.submittedDocuments || []).map((d) =>
+      d.id === docItem.id ? { ...d, status: nextStatus } : d
+    );
+    const updatedProf: UserSession = {
+      ...prof,
+      submittedDocuments: nextDocs,
+    };
+    saveProfileToRegistry(updatedProf);
+    void syncDocumentStatusWithBackend(
+      prof.uid || prof.memberId || prof.mobile,
+      docItem.id,
+      nextStatus
+    );
+    void syncUserProfileAcrossClouds(updatedProf);
+    setProfilesTick((t) => t + 1);
+  };
 
   return (
     <div
@@ -1710,13 +1776,15 @@ export function AdminControlPanelModal({
                           {prof.submittedDocuments && prof.submittedDocuments.length > 0 && (
                             <div className="pt-2 border-t border-slate-200/80 space-y-1.5">
                               <div className="text-[11px] font-bold uppercase text-[#0F213C]">
-                                Submitted Documents ({prof.submittedDocuments.length}):
+                                Submitted Documents ({prof.submittedDocuments.length}) — Click badge to update status:
                               </div>
                               <div className="flex flex-wrap gap-1.5">
-                                {prof.submittedDocuments.slice(0, 4).map((docItem) => (
-                                  <span
+                                {prof.submittedDocuments.slice(0, 6).map((docItem) => (
+                                  <button
                                     key={docItem.id}
-                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[11px] text-slate-700"
+                                    type="button"
+                                    onClick={() => handleAdminCycleDocStatus(prof, docItem)}
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-[11px] text-slate-700 cursor-pointer transition-colors"
                                   >
                                     <span className="font-semibold">{docItem.documentName}</span>
                                     <span
@@ -1730,13 +1798,41 @@ export function AdminControlPanelModal({
                                     >
                                       {docItem.status}
                                     </span>
-                                  </span>
+                                  </button>
                                 ))}
                               </div>
                             </div>
                           )}
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {backendEnquiries.length > 0 && (
+                    <div className="pt-4 border-t border-slate-200 space-y-2.5">
+                      <div className="text-xs font-bold uppercase tracking-wider text-[#0F213C]">
+                        {lang === 'en'
+                          ? `Live Backend Work Enquiries (${backendEnquiries.length})`
+                          : `ਬੈਕਐਂਡ ਵਿੱਚ ਦਰਜ ਕੰਮ ਬੇਨਤੀਆਂ (${backendEnquiries.length})`}
+                      </div>
+                      <div className="space-y-2">
+                        {backendEnquiries.slice(0, 8).map((enq) => (
+                          <div
+                            key={enq.id}
+                            className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div>
+                              <div className="font-bold text-[#0F213C]">
+                                {enq.userName} ({enq.userMobile}) — {enq.serviceName}
+                              </div>
+                              <div className="text-slate-600">{enq.workDescription}</div>
+                            </div>
+                            <span className="text-[11px] font-tabular text-slate-500 shrink-0">
+                              {enq.createdAt}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1970,6 +2066,11 @@ export function CustomerProfilePage({
     if (baseProfile.uid || auth.currentUser?.uid) {
       await saveUserProfileToFirestore(baseProfile);
     }
+    void syncDocumentsListWithBackend(
+      baseProfile.uid || baseProfile.memberId || baseProfile.mobile,
+      nextDocs
+    );
+    void syncUserProfileAcrossClouds(baseProfile);
     saveProfileToRegistry(baseProfile);
     onSaveSession(baseProfile);
   };
@@ -1998,6 +2099,11 @@ export function CustomerProfilePage({
 
   const handleStatusChange = async (docId: string, nextStatus: DocumentStatus) => {
     const nextDocs = updateSubmittedDocumentStatus(submittedDocs, docId, nextStatus);
+    void syncDocumentStatusWithBackend(
+      userSession?.uid || userSession?.memberId || mobile || 'guest',
+      docId,
+      nextStatus
+    );
     await persistSubmittedDocuments(nextDocs);
   };
 

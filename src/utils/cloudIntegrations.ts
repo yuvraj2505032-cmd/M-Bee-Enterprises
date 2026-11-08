@@ -373,3 +373,115 @@ export async function fetchAnnouncementFromBackend(): Promise<string | null> {
   return null;
 }
 
+export interface BackendEnquiryRecord {
+  id: string;
+  userName: string;
+  userMobile: string;
+  userCity?: string;
+  userEmail?: string;
+  memberId?: string;
+  serviceName: string;
+  workDescription: string;
+  preferredContact?: string;
+  referenceCode?: string;
+  createdAt: string;
+}
+
+/**
+ * Logs a Customer Work Enquiry / Service Request to the Backend Express server (/api/enquiries).
+ */
+export async function submitEnquiryToBackend(
+  payload: Omit<BackendEnquiryRecord, 'id' | 'createdAt'>
+): Promise<BackendEnquiryRecord | null> {
+  try {
+    const response = await fetch('/api/enquiries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as { enquiry?: BackendEnquiryRecord };
+      return data.enquiry || null;
+    }
+  } catch {
+    // ignore offline error
+  }
+  return null;
+}
+
+/**
+ * Fetches all logged Customer Work Enquiries from the Backend Express server (/api/enquiries).
+ */
+export async function fetchEnquiriesFromBackend(): Promise<BackendEnquiryRecord[]> {
+  try {
+    const response = await fetch('/api/enquiries');
+    if (response.ok) {
+      const data = (await response.json()) as { enquiries?: BackendEnquiryRecord[] };
+      return Array.isArray(data.enquiries) ? data.enquiries : [];
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+/**
+ * Syncs a customer's Submitted Documents list to the Backend Express server (/api/documents/:uid).
+ */
+export async function syncDocumentsListWithBackend(
+  uidOrKey: string,
+  submittedDocuments: SubmittedDocumentItem[]
+): Promise<boolean> {
+  if (!uidOrKey) return false;
+  try {
+    const response = await fetch(`/api/documents/${encodeURIComponent(uidOrKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submittedDocuments }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Updates a single Submitted Document's status badge (Pending, Processing, Completed) on the Backend (/api/documents/:uid/:docId).
+ */
+export async function syncDocumentStatusWithBackend(
+  uidOrKey: string,
+  docId: string,
+  status: SubmittedDocumentItem['status']
+): Promise<boolean> {
+  if (!uidOrKey || !docId) return false;
+  try {
+    const response = await fetch(
+      `/api/documents/${encodeURIComponent(uidOrKey)}/${encodeURIComponent(docId)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      }
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetches all synced customer profiles from the Backend Express server (/api/supabase/profiles).
+ */
+export async function fetchProfilesFromBackend(): Promise<SupabaseSyncPayload[]> {
+  try {
+    const response = await fetch('/api/supabase/profiles');
+    if (response.ok) {
+      const data = (await response.json()) as { profiles?: SupabaseSyncPayload[] };
+      return Array.isArray(data.profiles) ? data.profiles : [];
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+

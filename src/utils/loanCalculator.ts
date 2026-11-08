@@ -35,7 +35,6 @@ export const SECONDARY_WHATSAPP = '919915628427';
 export const BUSINESS_EMAIL = 'enterprisesmbee@gmail.com';
 export const PROPRIETOR_NAMES_EN = 'Baljinder Singh & Manpreet Singh';
 export const PROPRIETOR_NAMES_PA = 'ਬਲਜਿੰਦਰ ਸਿੰਘ ਅਤੇ ਮਨਪ੍ਰੀਤ ਸਿੰਘ';
-export const OFFICIAL_WEBSITE_URL = 'Mbeeenterprise';
 
 export type DocumentStatus = 'Pending' | 'Processing' | 'Completed';
 

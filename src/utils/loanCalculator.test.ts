@@ -201,11 +201,10 @@ test('parseCorsOrigins, formatSupabaseSyncPayload, and buildDeterministicAdvisor
   assert.equal(syncPayload.submittedDocuments.length, 3);
 });
 
-import { filterServicesBySearchQuery, OFFICIAL_WEBSITE_URL } from './loanCalculator';
+import { filterServicesBySearchQuery } from './loanCalculator';
 import { SERVICES_CATALOG } from '../data/translations';
 
-test('filterServicesBySearchQuery filters SERVICES_CATALOG in real-time by English, Punjabi, and checklist terms, and OFFICIAL_WEBSITE_URL is Mbeeenterprise', () => {
-  assert.equal(OFFICIAL_WEBSITE_URL, 'Mbeeenterprise');
+test('filterServicesBySearchQuery filters SERVICES_CATALOG in real-time by English, Punjabi, and checklist terms', () => {
   assert.equal(filterServicesBySearchQuery(SERVICES_CATALOG, '').length, 19);
   assert.equal(filterServicesBySearchQuery(SERVICES_CATALOG, '   ').length, 19);
 
