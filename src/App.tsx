@@ -51,6 +51,7 @@ import {
   createSubmittedDocumentItem,
   getDefaultSubmittedDocuments,
   filterServicesBySearchQuery,
+  OFFICIAL_WEBSITE_URL,
 } from './utils/loanCalculator';
 import { MBMonogramLogo, ShopVisualShowcase } from './components/BrandVisuals';
 import { LoanCalculator } from './components/LoanCalculator';
@@ -83,7 +84,13 @@ import {
 } from './firebase';
 import { buildGoogleUserProfile } from './utils/loanCalculator';
 import { SmartServiceAdvisor } from './components/SmartServiceAdvisor';
-import { syncUserProfileAcrossClouds } from './utils/cloudIntegrations';
+import {
+  syncUserProfileAcrossClouds,
+  fetchServicesFromBackend,
+  syncCustomServicesWithBackend,
+  syncAnnouncementWithBackend,
+  fetchAnnouncementFromBackend,
+} from './utils/cloudIntegrations';
 
 const STORAGE_KEY_USER_SESSION = 'mbee_user_session_v1';
 
@@ -109,22 +116,7 @@ export default function App() {
     useState<AdminNotificationPayload | null>(null);
   const [quickTaskText, setQuickTaskText] = useState<string>('');
   const [quickSendConfirmed, setQuickSendConfirmed] = useState<boolean>(false);
-  const [urlCopied, setUrlCopied] = useState<boolean>(false);
-
-  const LIVE_WEBSITE_URL =
-    typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
-      ? window.location.origin
-      : 'https://ais-pre-smzdu4pvxntjjvj7cknu2v-431998150989.asia-east1.run.app';
-
-  const handleCopyWebsiteUrl = () => {
-    try {
-      navigator.clipboard.writeText(LIVE_WEBSITE_URL);
-    } catch {
-      // ignore clipboard restriction
-    }
-    setUrlCopied(true);
-    setTimeout(() => setUrlCopied(false), 2500);
-  };
+  const [backendSyncedServices, setBackendSyncedServices] = useState<ServiceItem[] | null>(null);
 
   const t = UI_TEXT[lang];
 
@@ -137,10 +129,21 @@ export default function App() {
           setUserSession(parsed);
         }
       }
-      setCustomServices(loadCustomServices());
+      const loadedCustom = loadCustomServices();
+      setCustomServices(loadedCustom);
+      if (loadedCustom.length > 0) {
+        void syncCustomServicesWithBackend(loadedCustom);
+      }
       const savedNotice = localStorage.getItem(STORAGE_KEY_ADMIN_ANNOUNCEMENT);
       if (savedNotice) {
         setAdminAnnouncement(savedNotice);
+        void syncAnnouncementWithBackend(savedNotice);
+      } else {
+        void fetchAnnouncementFromBackend().then((serverNotice) => {
+          if (serverNotice) {
+            setAdminAnnouncement(serverNotice);
+          }
+        });
       }
     } catch {
       // ignore storage errors
@@ -173,8 +176,25 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void fetchServicesFromBackend<ServiceItem>({
+      query: serviceSearchQuery,
+      category: selectedCategory,
+      page: activePage,
+    }).then((res) => {
+      if (active && res && Array.isArray(res.services)) {
+        setBackendSyncedServices(res.services);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [serviceSearchQuery, selectedCategory, activePage, customServices]);
+
   const handleUpdateCustomServices = (updated: ServiceItem[]) => {
     setCustomServices(updated);
+    void syncCustomServicesWithBackend(updated);
     try {
       localStorage.setItem(STORAGE_KEY_CUSTOM_SERVICES, JSON.stringify(updated));
     } catch {
@@ -184,6 +204,7 @@ export default function App() {
 
   const handleUpdateAnnouncement = (text: string) => {
     setAdminAnnouncement(text);
+    void syncAnnouncementWithBackend(text);
     try {
       localStorage.setItem(STORAGE_KEY_ADMIN_ANNOUNCEMENT, text);
     } catch {
@@ -372,7 +393,7 @@ export default function App() {
     if (page !== activePage) {
       setPageHistory((prev) => [...prev, activePage]);
       try {
-        window.history.pushState({ page }, '', `#${page}`);
+        window.history.pushState({ page }, '', `/${OFFICIAL_WEBSITE_URL}#${page}`);
       } catch {
         // ignore history error in restricted iframe
       }
@@ -425,8 +446,12 @@ export default function App() {
     } else if (selectedCategory !== 'all') {
       baseList = allServicesCombined.filter((s) => s.categoryId === selectedCategory);
     }
-    return filterServicesBySearchQuery(baseList, serviceSearchQuery);
-  }, [activePage, selectedCategory, allServicesCombined, serviceSearchQuery]);
+    const localFiltered = filterServicesBySearchQuery(baseList, serviceSearchQuery);
+    if (backendSyncedServices && backendSyncedServices.length === localFiltered.length) {
+      return backendSyncedServices;
+    }
+    return localFiltered;
+  }, [activePage, selectedCategory, allServicesCombined, serviceSearchQuery, backendSyncedServices]);
 
   const allPagesList: Array<{ id: PageId; label: string }> = [
     { id: 'home', label: t.nav.home },
@@ -773,32 +798,6 @@ export default function App() {
                   >
                     WhatsApp
                   </a>
-                </div>
-
-                {/* Official Website URL Copy & Share Box */}
-                <div className="mt-1 p-2.5 rounded-lg bg-[#081326] border border-[#C69C3A]/30 flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold text-[#E5C158] uppercase tracking-wider">
-                      {lang === 'en' ? 'Official Website Link (URL)' : 'ਵੈੱਬਸਾਈਟ ਲਿੰਕ (URL)'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyWebsiteUrl}
-                      data-testid="copy-website-url-btn"
-                      className="px-2.5 py-1 rounded bg-[#C69C3A] hover:bg-[#D4AD47] text-[#081326] text-[11px] font-extrabold transition-colors cursor-pointer"
-                    >
-                      {urlCopied
-                        ? lang === 'en'
-                          ? '✓ Link Copied!'
-                          : '✓ ਲਿੰਕ ਕਾਪੀ ਹੋ ਗਿਆ!'
-                        : lang === 'en'
-                        ? 'Copy URL'
-                        : 'URL ਕਾਪੀ ਕਰੋ'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] font-mono text-slate-300 truncate select-all">
-                    {LIVE_WEBSITE_URL}
-                  </p>
                 </div>
               </div>
             </div>

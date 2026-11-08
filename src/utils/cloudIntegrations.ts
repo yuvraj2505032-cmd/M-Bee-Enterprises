@@ -290,3 +290,86 @@ export async function querySmartServiceAdvisor(
   }
   return buildDeterministicAdvisorResponse(req);
 }
+
+export interface BackendServicesResponse<T = unknown> {
+  services: T[];
+  customServices: T[];
+  totalCount: number;
+  filteredCount: number;
+  query: string;
+  category: string;
+  source: 'backend-api' | 'frontend-fallback';
+}
+
+/**
+ * Queries the Backend Express API (/api/services) for real-time filtered services
+ * across both Frontend and Backend.
+ */
+export async function fetchServicesFromBackend<T = unknown>(params: {
+  query?: string;
+  category?: string;
+  page?: string;
+}): Promise<BackendServicesResponse<T> | null> {
+  try {
+    const searchParams = new URLSearchParams();
+    if (params.query) searchParams.set('q', params.query);
+    if (params.category) searchParams.set('category', params.category);
+    if (params.page) searchParams.set('page', params.page);
+
+    const response = await fetch(`/api/services?${searchParams.toString()}`);
+    if (response.ok) {
+      return (await response.json()) as BackendServicesResponse<T>;
+    }
+  } catch {
+    // Offline fallback handled by caller
+  }
+  return null;
+}
+
+/**
+ * Syncs custom admin-created services to the Backend Express server (/api/services/custom).
+ */
+export async function syncCustomServicesWithBackend<T = unknown>(
+  customServices: T[]
+): Promise<boolean> {
+  try {
+    const response = await fetch('/api/services/custom', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customServices }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Syncs the Admin Announcement banner with the Backend Express server (/api/announcements).
+ */
+export async function syncAnnouncementWithBackend(announcement: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/announcements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ announcement }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchAnnouncementFromBackend(): Promise<string | null> {
+  try {
+    const response = await fetch('/api/announcements');
+    if (response.ok) {
+      const data = (await response.json()) as { announcement?: string };
+      return typeof data.announcement === 'string' ? data.announcement : null;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+

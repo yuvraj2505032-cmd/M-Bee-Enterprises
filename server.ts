@@ -8,6 +8,10 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { GoogleGenAI, Type } from '@google/genai';
+import { SERVICES_CATALOG } from './src/data/translations.ts';
+import type { ServiceItem } from './src/data/translations.ts';
+import { filterServicesBySearchQuery } from './src/utils/loanCalculator.ts';
+import type { SubmittedDocumentItem } from './src/utils/loanCalculator.ts';
 
 interface SearchSource {
   title: string;
@@ -33,11 +37,13 @@ interface SyncedProfileRecord {
   city: string;
   occupation?: string;
   authProvider: string;
-  submittedDocuments: unknown[];
+  submittedDocuments: SubmittedDocumentItem[];
   updatedAt: string;
 }
 
 const inMemorySyncedProfiles = new Map<string, SyncedProfileRecord>();
+let serverCustomServices: ServiceItem[] = [];
+let serverAnnouncement: string = '';
 
 function getConfiguredCorsOrigins(): string[] {
   const raw = process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173';
@@ -453,6 +459,100 @@ async function startServer() {
       googleOAuthEnabled: true,
       customClientIdConfigured: Boolean(clientId && clientId.trim()),
       clientId: clientId.trim(),
+    });
+  });
+
+  app.get('/api/site-info', (_req: Request, res: Response) => {
+    res.json({
+      officialWebsiteUrl: 'Mbeeenterprise',
+      routePath: '/Mbeeenterprise',
+    });
+  });
+
+  // 4. Full-Stack Services Catalog & Real-Time Search API (Frontend + Backend)
+  app.get('/api/services', (req: Request, res: Response) => {
+    const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
+    const category = typeof req.query.category === 'string' ? req.query.category : 'all';
+    const page = typeof req.query.page === 'string' ? req.query.page : 'home';
+
+    const combined: ServiceItem[] = [...serverCustomServices, ...SERVICES_CATALOG];
+    let baseList = combined;
+
+    if (page === 'loans') {
+      baseList = combined.filter((s) => s.categoryId === 'financial');
+    } else if (page === 'documentation') {
+      baseList = combined.filter(
+        (s) => s.categoryId === 'documentation' || s.categoryId === 'digital'
+      );
+    } else if (page === 'property') {
+      baseList = combined.filter((s) => s.categoryId === 'property');
+    } else if (category && category !== 'all') {
+      baseList = combined.filter((s) => s.categoryId === category);
+    }
+
+    const filtered = filterServicesBySearchQuery(baseList, rawQuery);
+    res.json({
+      services: filtered,
+      customServices: serverCustomServices,
+      totalCount: combined.length,
+      filteredCount: filtered.length,
+      query: rawQuery,
+      category,
+      source: 'backend-api',
+    });
+  });
+
+  app.put('/api/services/custom', (req: Request, res: Response) => {
+    const body = req.body as { customServices?: ServiceItem[] };
+    if (Array.isArray(body.customServices)) {
+      serverCustomServices = body.customServices.slice(0, 50);
+    }
+    res.json({
+      synced: true,
+      customServices: serverCustomServices,
+      totalCount: serverCustomServices.length + SERVICES_CATALOG.length,
+    });
+  });
+
+  // 5. Full-Stack Admin Announcement API (Frontend + Backend)
+  app.get('/api/announcements', (_req: Request, res: Response) => {
+    res.json({ announcement: serverAnnouncement });
+  });
+
+  app.post('/api/announcements', (req: Request, res: Response) => {
+    const body = req.body as { announcement?: string };
+    serverAnnouncement = typeof body.announcement === 'string' ? body.announcement.slice(0, 500) : '';
+    res.json({ synced: true, announcement: serverAnnouncement });
+  });
+
+  // 6. Full-Stack Customer Document Status Tracker API (Frontend + Backend)
+  app.get('/api/documents/:uid', (req: Request, res: Response) => {
+    const uid = String(req.params.uid || '');
+    const record = inMemorySyncedProfiles.get(uid);
+    res.json({
+      uid,
+      submittedDocuments: record?.submittedDocuments || [],
+    });
+  });
+
+  app.patch('/api/documents/:uid/:docId', (req: Request, res: Response) => {
+    const uid = String(req.params.uid || '');
+    const docId = String(req.params.docId || '');
+    const body = req.body as { status?: SubmittedDocumentItem['status'] };
+    const record = inMemorySyncedProfiles.get(uid);
+    if (record && Array.isArray(record.submittedDocuments) && body.status) {
+      record.submittedDocuments = record.submittedDocuments.map((d) =>
+        d.id === docId ? { ...d, status: body.status! } : d
+      );
+      record.updatedAt = new Date().toISOString();
+      inMemorySyncedProfiles.set(uid, record);
+    }
+    res.json({
+      synced: true,
+      uid,
+      docId,
+      status: body.status,
+      submittedDocuments: record?.submittedDocuments || [],
     });
   });
 
