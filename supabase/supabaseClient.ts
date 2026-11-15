@@ -3,13 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { SERVICES_CATALOG } from '../src/data/translations.ts';
+import type { ServiceItem } from '../src/data/translations.ts';
+
 /**
- * Supabase SQL Schema, Queries & Website Client Bridge for M Bee Enterprises
+ * Supabase SQL Schema, Queries, Requirements & Website Client Bridge for M Bee Enterprises
  * Proprietors: Baljinder Singh & Manpreet Singh · Mahilpur, Punjab 146105
- * Files: /supabase.sql, /supabase/schema.sql, /supabase/queries.sql
+ * Files: /supabase.sql, /supabase/schema.sql, /supabase/queries.sql, /requirements.txt
  */
 export const MBEE_SUPABASE_SQL_SCHEMA = `-- M Bee Enterprises (Prop. Baljinder Singh & Manpreet Singh) - Supabase SQL Schema & Queries
--- Files: /supabase.sql | /supabase/schema.sql | /supabase/queries.sql
+-- Files: /supabase.sql | /supabase/schema.sql | /supabase/queries.sql | /requirements.txt
 
 -- 1. CREATE TABLES
 CREATE TABLE IF NOT EXISTS public.mbee_profiles (
@@ -51,6 +54,18 @@ CREATE TABLE IF NOT EXISTS public.mbee_submitted_documents (
   submitted_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.mbee_service_requirements (
+  service_id TEXT PRIMARY KEY,
+  category_id TEXT NOT NULL,
+  service_title_en TEXT NOT NULL,
+  service_title_pa TEXT NOT NULL,
+  required_documents_en JSONB NOT NULL DEFAULT '[]'::jsonb,
+  required_documents_pa JSONB NOT NULL DEFAULT '[]'::jsonb,
+  turnaround_en TEXT NOT NULL DEFAULT '',
+  turnaround_pa TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- 2. ADMIN DASHBOARD SUMMARY QUERY
 SELECT
   COUNT(*) AS total_submissions,
@@ -65,15 +80,165 @@ SET status = 'Completed', updated_at = NOW()
 WHERE id = 'ENQ-SEED-101'
 RETURNING *;`;
 
+export const MBEE_PROJECT_REQUIREMENTS_TEXT = `# M Bee Enterprises – Complete Project Requirements (requirements.txt)
+# Proprietors: Baljinder Singh & Manpreet Singh · Mahilpur, Punjab 146105
+# Files: /requirements.txt | /frontend/requirements.txt | /backend/requirements.txt | /supabase/requirements.txt
+
+# [1] Runtime & Build Tools
+node>=20.0.0
+npm>=10.0.0
+bun>=1.1.0
+typescript==7.0.2
+tsx==4.21.0
+
+# [2] Frontend Dependencies (/frontend & /src)
+react==19.0.1
+react-dom==19.0.1
+vite==8.3.0
+@vitejs/plugin-react==6.1.1
+tailwindcss==4.3.3
+@tailwindcss/vite==4.3.3
+lucide-react==0.546.0
+motion==12.23.24
+firebase==13.2.0
+
+# [3] Backend Dependencies (/backend & /server.ts)
+express==4.21.2
+dotenv==17.2.3
+@google/genai==3.0.0
+
+# [4] Supabase & Cloud Environment Keys (.env / .env.example)
+SUPABASE_URL & VITE_SUPABASE_URL
+SUPABASE_ANON_KEY & VITE_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+GOOGLE_CLIENT_ID & VITE_GOOGLE_CLIENT_ID
+VITE_FIREBASE_PROJECT_ID & VITE_FIREBASE_API_KEY
+GEMINI_API_KEY, GROQ_API_KEY, TAVILY_API_KEY`;
+
 export const MBEE_SUPABASE_TABLES = [
   'mbee_profiles',
   'mbee_enquiries',
   'mbee_submitted_documents',
   'mbee_custom_services',
   'mbee_announcements',
+  'mbee_service_requirements',
 ] as const;
 
 export type MbeeSupabaseTableName = (typeof MBEE_SUPABASE_TABLES)[number];
+
+export interface ServiceRequirementRecord {
+  serviceId: string;
+  categoryId: string;
+  serviceTitleEn: string;
+  serviceTitlePa: string;
+  requiredDocumentsEn: string[];
+  requiredDocumentsPa: string[];
+  turnaroundEn: string;
+  turnaroundPa: string;
+}
+
+/**
+ * Returns structured bilingual document & eligibility requirements for all M Bee Enterprises services.
+ */
+export function getAllServiceRequirements(
+  customServices: ServiceItem[] = []
+): ServiceRequirementRecord[] {
+  const combined = [...customServices, ...SERVICES_CATALOG];
+  return combined.map((srv) => ({
+    serviceId: srv.id,
+    categoryId: srv.categoryId,
+    serviceTitleEn: srv.title.en,
+    serviceTitlePa: srv.title.pa,
+    requiredDocumentsEn: srv.preparationList.en,
+    requiredDocumentsPa: srv.preparationList.pa,
+    turnaroundEn: srv.turnaroundNote.en,
+    turnaroundPa: srv.turnaroundNote.pa,
+  }));
+}
+
+/**
+ * Finds the matching required documents checklist for any service title or enquiry description.
+ */
+export function getRequirementsForServiceTitle(
+  serviceName: string,
+  lang: 'en' | 'pa' = 'en',
+  customServices: ServiceItem[] = []
+): string[] {
+  const q = (serviceName || '').toLowerCase();
+  const allReqs = getAllServiceRequirements(customServices);
+
+  const exactOrPartial = allReqs.find(
+    (r) =>
+      q.includes(r.serviceTitleEn.toLowerCase()) ||
+      r.serviceTitleEn.toLowerCase().includes(q) ||
+      q.includes(r.serviceId.toLowerCase())
+  );
+  if (exactOrPartial) {
+    return lang === 'pa'
+      ? exactOrPartial.requiredDocumentsPa
+      : exactOrPartial.requiredDocumentsEn;
+  }
+
+  if (q.includes('passport') || q.includes('pcc')) {
+    return lang === 'pa'
+      ? [
+          'ਅਸਲ ਆਧਾਰ ਕਾਰਡ (ਜਨਮ ਮਿਤੀ ਅਤੇ ਪਤੇ ਸਮੇਤ)',
+          'ਪੈਨ ਕਾਰਡ ਜਾਂ ਵੋਟਰ ਆਈ.ਡੀ.',
+          '10ਵੀਂ ਜਮਾਤ ਦਾ ਸਰਟੀਫਿਕੇਟ (Non-ECR ਲਈ)',
+          'ਬੈਂਕ ਪਾਸਬੁੱਕ (ਫੋਟੋ ਸਮੇਤ)',
+        ]
+      : [
+          'Original Aadhaar Card (with full DOB & address)',
+          'PAN Card or Voter ID Card',
+          '10th Matriculation Certificate (for Non-ECR)',
+          'Active Bank Passbook with photograph',
+        ];
+  }
+
+  if (q.includes('loan') || q.includes('home') || q.includes('car') || q.includes('emi')) {
+    return lang === 'pa'
+      ? [
+          'ਆਧਾਰ ਕਾਰਡ ਅਤੇ ਪੈਨ ਕਾਰਡ (KYC)',
+          'ਪਿਛਲੇ 6–12 ਮਹੀਨਿਆਂ ਦੀ ਬੈਂਕ ਸਟੇਟਮੈਂਟ',
+          'ਸੈਲਰੀ ਸਲਿੱਪਾਂ ਜਾਂ 2–3 ਸਾਲਾਂ ਦੀ ITR',
+          'ਪ੍ਰਾਪਰਟੀ ਦੇ ਕਾਗਜ਼ਾਤ ਜਾਂ ਕੋਟੇਸ਼ਨ',
+        ]
+      : [
+          'Aadhaar Card & PAN Card (KYC set)',
+          'Last 6–12 months Bank Account Statement',
+          'Salary Slips (3 months) or 2–3 years ITR',
+          'Property Title Deed or Vehicle Proforma Invoice',
+        ];
+  }
+
+  if (q.includes('pan') || q.includes('aadhaar') || q.includes('kyc')) {
+    return lang === 'pa'
+      ? [
+          'ਅਸਲ ਆਧਾਰ ਕਾਰਡ ਕਾਪੀ',
+          'ਜਨਮ ਮਿਤੀ ਦਾ ਸਬੂਤ (10ਵੀਂ / ਜਨਮ ਸਰਟੀਫਿਕੇਟ)',
+          '2 ਪਾਸਪੋਰਟ ਸਾਈਜ਼ ਫੋਟੋਆਂ',
+          'ਆਧਾਰ ਨਾਲ ਲਿੰਕ ਮੋਬਾਈਲ ਨੰਬਰ',
+        ]
+      : [
+          'Original Aadhaar Card copy',
+          'Date of Birth proof (Matric / Birth Certificate)',
+          '2 Recent Passport-size photographs',
+          'Active Mobile Number linked with Aadhaar',
+        ];
+  }
+
+  return lang === 'pa'
+    ? [
+        'ਅਸਲ ਆਧਾਰ ਕਾਰਡ ਅਤੇ ਪੈਨ ਕਾਰਡ',
+        '2 ਪਾਸਪੋਰਟ ਸਾਈਜ਼ ਫੋਟੋਆਂ',
+        'ਐਕਟਿਵ ਮੋਬਾਈਲ ਨੰਬਰ',
+      ]
+    : [
+        'Original Aadhaar Card & PAN Card',
+        '2 Recent Passport-size photographs',
+        'Active Mobile Number for OTP verification',
+      ];
+}
 
 export interface SupabaseCloudStatus {
   connected: boolean;
@@ -84,6 +249,7 @@ export interface SupabaseCloudStatus {
     mbee_submitted_documents: number;
     mbee_custom_services: number;
     mbee_announcements: number;
+    mbee_service_requirements?: number;
   };
   integrations: {
     googleAuth: 'active';
@@ -116,6 +282,7 @@ export async function fetchSupabaseCloudStatus(): Promise<SupabaseCloudStatus> {
       mbee_submitted_documents: 3,
       mbee_custom_services: 0,
       mbee_announcements: 0,
+      mbee_service_requirements: SERVICES_CATALOG.length,
     },
     integrations: {
       googleAuth: 'active',
@@ -129,7 +296,7 @@ export async function fetchSupabaseCloudStatus(): Promise<SupabaseCloudStatus> {
 }
 
 /**
- * Unified Supabase Website Client for querying or inserting records into any of the 5 M Bee tables.
+ * Unified Supabase Website Client for querying or inserting records into any of the M Bee tables.
  */
 export const mbeeSupabaseClient = {
   async selectFromTable<T = Record<string, unknown>>(

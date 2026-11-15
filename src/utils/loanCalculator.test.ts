@@ -204,7 +204,13 @@ test('parseCorsOrigins, formatSupabaseSyncPayload, and buildDeterministicAdvisor
 import { filterServicesBySearchQuery } from './loanCalculator';
 import { SERVICES_CATALOG } from '../data/translations';
 import { summarizeEnquiriesForAdmin } from './cloudIntegrations';
-import { MBEE_SUPABASE_SQL_SCHEMA, MBEE_SUPABASE_TABLES } from '../../supabase/supabaseClient';
+import {
+  MBEE_SUPABASE_SQL_SCHEMA,
+  MBEE_SUPABASE_TABLES,
+  MBEE_PROJECT_REQUIREMENTS_TEXT,
+  getAllServiceRequirements,
+  getRequirementsForServiceTitle,
+} from '../../supabase/supabaseClient';
 
 test('filterServicesBySearchQuery filters SERVICES_CATALOG in real-time by English, Punjabi, and checklist terms', () => {
   assert.equal(filterServicesBySearchQuery(SERVICES_CATALOG, '').length, 19);
@@ -222,7 +228,7 @@ test('filterServicesBySearchQuery filters SERVICES_CATALOG in real-time by Engli
   assert.equal(noMatches.length, 0);
 });
 
-test('summarizeEnquiriesForAdmin and Supabase SQL schema work accurately', () => {
+test('summarizeEnquiriesForAdmin, Supabase SQL schema, and Requirements helpers work accurately', () => {
   const summary = summarizeEnquiriesForAdmin([
     {
       id: 'ENQ-1',
@@ -260,6 +266,20 @@ test('summarizeEnquiriesForAdmin and Supabase SQL schema work accurately', () =>
 
   assert.ok(MBEE_SUPABASE_SQL_SCHEMA.includes('CREATE TABLE IF NOT EXISTS public.mbee_profiles'));
   assert.ok(MBEE_SUPABASE_SQL_SCHEMA.includes('CREATE TABLE IF NOT EXISTS public.mbee_enquiries'));
-  assert.equal(MBEE_SUPABASE_TABLES.length, 5);
+  assert.ok(
+    MBEE_SUPABASE_SQL_SCHEMA.includes('CREATE TABLE IF NOT EXISTS public.mbee_service_requirements')
+  );
+  assert.equal(MBEE_SUPABASE_TABLES.length, 6);
+
+  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('react==19.0.1'));
+  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('express==4.21.2'));
+
+  const allServiceReqs = getAllServiceRequirements();
+  assert.equal(allServiceReqs.length, 19);
+
+  const passportReqsEn = getRequirementsForServiceTitle('Passport Application Assistance', 'en');
+  assert.ok(passportReqsEn.length >= 3);
+  const passportReqsPa = getRequirementsForServiceTitle('Passport Application Assistance', 'pa');
+  assert.ok(passportReqsPa.length >= 3);
 });
 

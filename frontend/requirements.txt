@@ -1,0 +1,28 @@
+# =============================================================================
+# M Bee Enterprises – FRONTEND REQUIREMENTS (/frontend & /src)
+# Proprietors: Baljinder Singh & Manpreet Singh
+# =============================================================================
+
+# Core UI & Framework
+react==19.0.1
+react-dom==19.0.1
+vite==8.3.0
+@vitejs/plugin-react==6.1.1
+
+# Styling & Animations
+tailwindcss==4.3.3
+@tailwindcss/vite==4.3.3
+motion==12.23.24
+lucide-react==0.546.0
+
+# Authentication & Cloud Sync
+firebase==13.2.0
+
+# Frontend Environment Keys (.env)
+# VITE_SUPABASE_URL
+# VITE_SUPABASE_ANON_KEY
+# VITE_GOOGLE_CLIENT_ID
+# VITE_FIREBASE_API_KEY
+# VITE_FIREBASE_AUTH_DOMAIN
+# VITE_FIREBASE_PROJECT_ID
+# VITE_FIREBASE_FIRESTORE_DATABASE_ID

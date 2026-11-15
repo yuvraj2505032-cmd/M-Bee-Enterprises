@@ -23,7 +23,7 @@ export function getConfiguredCorsOrigins(): string[] {
 
 export async function startBackendServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '2mb' }));
 
@@ -57,12 +57,12 @@ export async function startBackendServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (_req: Request, res: Response) => {
+    app.use((_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  return app.listen(PORT, '0.0.0.0', () => {
     console.log(`M Bee Enterprises Backend Server running on http://localhost:${PORT}`);
   });
 }

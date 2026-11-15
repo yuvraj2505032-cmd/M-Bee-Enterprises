@@ -25,6 +25,9 @@ import type { AdvisorResult } from './advisorService.ts';
 import {
   MBEE_SUPABASE_SQL_SCHEMA,
   MBEE_SUPABASE_TABLES,
+  MBEE_PROJECT_REQUIREMENTS_TEXT,
+  getAllServiceRequirements,
+  getRequirementsForServiceTitle,
 } from '../supabase/supabaseClient.ts';
 
 export interface SyncedProfileRecord {
@@ -251,6 +254,7 @@ export function createBackendApiRouter() {
         mbee_submitted_documents: totalDocs,
         mbee_custom_services: serverCustomServices.length,
         mbee_announcements: serverAnnouncement ? 1 : 0,
+        mbee_service_requirements: SERVICES_CATALOG.length + serverCustomServices.length,
       },
       integrations: {
         googleAuth: 'active',
@@ -295,6 +299,13 @@ export function createBackendApiRouter() {
       });
       return;
     }
+    if (table === 'mbee_service_requirements') {
+      res.json({
+        table,
+        rows: getAllServiceRequirements(serverCustomServices),
+      });
+      return;
+    }
     res.status(404).json({ error: `Unknown table: ${table}` });
   });
 
@@ -303,6 +314,39 @@ export function createBackendApiRouter() {
     const row = (req.body || {}) as Record<string, unknown>;
     await forwardToSupabaseRest(table, 'POST', row);
     res.json({ synced: true, table, row });
+  });
+
+  // Service & Project Requirements Endpoint (/api/requirements)
+  router.get('/requirements', (req: Request, res: Response) => {
+    const serviceQuery = typeof req.query.service === 'string' ? req.query.service.trim() : '';
+    const categoryQuery = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+    const allReqs = getAllServiceRequirements(serverCustomServices);
+
+    const filteredReqs = allReqs.filter((item) => {
+      if (categoryQuery && categoryQuery !== 'all' && item.categoryId !== categoryQuery) {
+        return false;
+      }
+      if (!serviceQuery) return true;
+      const q = serviceQuery.toLowerCase();
+      return (
+        item.serviceTitleEn.toLowerCase().includes(q) ||
+        item.serviceTitlePa.toLowerCase().includes(q) ||
+        item.serviceId.toLowerCase().includes(q)
+      );
+    });
+
+    res.json({
+      projectRequirementsFile: 'requirements.txt',
+      projectRequirementsText: MBEE_PROJECT_REQUIREMENTS_TEXT,
+      totalServices: allReqs.length,
+      serviceRequirements: filteredReqs,
+      matchedChecklistEn: serviceQuery
+        ? getRequirementsForServiceTitle(serviceQuery, 'en', serverCustomServices)
+        : [],
+      matchedChecklistPa: serviceQuery
+        ? getRequirementsForServiceTitle(serviceQuery, 'pa', serverCustomServices)
+        : [],
+    });
   });
 
   // 3. Google OAuth / Direct Account Linking Config Endpoint (GOOGLE_CLIENT_ID / VITE_GOOGLE_CLIENT_ID)

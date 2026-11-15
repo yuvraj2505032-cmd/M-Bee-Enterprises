@@ -84,12 +84,26 @@ CREATE TABLE IF NOT EXISTS public.mbee_announcements (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- 6. Service Document & Eligibility Requirements Table (mbee_service_requirements)
+CREATE TABLE IF NOT EXISTS public.mbee_service_requirements (
+  service_id TEXT PRIMARY KEY,
+  category_id TEXT NOT NULL CHECK (category_id IN ('documentation', 'financial', 'property', 'digital')),
+  service_title_en TEXT NOT NULL,
+  service_title_pa TEXT NOT NULL,
+  required_documents_en JSONB NOT NULL DEFAULT '[]'::jsonb,
+  required_documents_pa JSONB NOT NULL DEFAULT '[]'::jsonb,
+  turnaround_en TEXT NOT NULL DEFAULT '',
+  turnaround_pa TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Indexes for fast searching & filtering
 CREATE INDEX IF NOT EXISTS idx_mbee_profiles_mobile ON public.mbee_profiles (mobile);
 CREATE INDEX IF NOT EXISTS idx_mbee_enquiries_status ON public.mbee_enquiries (status);
 CREATE INDEX IF NOT EXISTS idx_mbee_enquiries_mobile ON public.mbee_enquiries (user_mobile);
 CREATE INDEX IF NOT EXISTS idx_mbee_submitted_docs_uid ON public.mbee_submitted_documents (uid);
 CREATE INDEX IF NOT EXISTS idx_mbee_submitted_docs_status ON public.mbee_submitted_documents (status);
+CREATE INDEX IF NOT EXISTS idx_mbee_service_req_category ON public.mbee_service_requirements (category_id);
 
 -- =============================================================================
 -- PART 2: ROW LEVEL SECURITY (RLS) POLICIES
@@ -100,6 +114,7 @@ ALTER TABLE public.mbee_enquiries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mbee_submitted_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mbee_custom_services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mbee_announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mbee_service_requirements ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow public access on mbee_profiles" ON public.mbee_profiles;
 CREATE POLICY "Allow public access on mbee_profiles"

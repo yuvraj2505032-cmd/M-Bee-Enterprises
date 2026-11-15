@@ -35,8 +35,10 @@ import {
 import {
   MBEE_SUPABASE_SQL_SCHEMA,
   MBEE_SUPABASE_TABLES,
+  MBEE_PROJECT_REQUIREMENTS_TEXT,
   SupabaseCloudStatus,
   fetchSupabaseCloudStatus,
+  getRequirementsForServiceTitle,
 } from '../../supabase/supabaseClient';
 
 export interface AdminDashboardProps {
@@ -58,6 +60,8 @@ export function AdminDashboard({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [showSqlSchema, setShowSqlSchema] = useState<boolean>(false);
   const [sqlCopied, setSqlCopied] = useState<boolean>(false);
+  const [showRequirementsViewer, setShowRequirementsViewer] = useState<boolean>(false);
+  const [reqCopied, setReqCopied] = useState<boolean>(false);
 
   const loadFromBackend = async () => {
     setLoading(true);
@@ -196,6 +200,16 @@ export function AdminDashboard({
     setTimeout(() => setSqlCopied(false), 2500);
   };
 
+  const handleCopyRequirements = () => {
+    try {
+      void navigator.clipboard?.writeText(MBEE_PROJECT_REQUIREMENTS_TEXT).catch(() => {});
+    } catch {
+      // ignore
+    }
+    setReqCopied(true);
+    setTimeout(() => setReqCopied(false), 2500);
+  };
+
   const getBadgeStyle = (status: DocumentStatus = 'Pending') => {
     if (status === 'Completed') {
       return 'bg-emerald-100 text-emerald-900 border-emerald-300';
@@ -229,7 +243,17 @@ export function AdminDashboard({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowRequirementsViewer((prev) => !prev)}
+            data-testid="toggle-requirements-btn"
+            className="px-3 py-1.5 rounded-xl bg-[#FBF6E9] hover:bg-[#F5E8C7] text-[#0F213C] border border-[#C69C3A]/50 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <FileCheck2 className="w-3.5 h-3.5 text-[#8A6615]" />
+            <span>{lang === 'en' ? 'Requirements' : 'Requirements (ਲੋੜਾਂ)'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowSqlSchema((prev) => !prev)}
@@ -317,6 +341,37 @@ export function AdminDashboard({
           </div>
         )}
       </div>
+
+      {/* Collapsible Project & Service Requirements Viewer (/requirements.txt) */}
+      {showRequirementsViewer && (
+        <div
+          data-testid="admin-requirements-viewer"
+          className="p-4 rounded-xl bg-[#081326] text-slate-100 border border-[#C69C3A]/40 space-y-2.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-bold text-[#E5C158]">
+                requirements.txt · Frontend + Backend + Supabase + Environment Requirements
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Files: /requirements.txt, /frontend/requirements.txt, /backend/requirements.txt, /supabase/requirements.txt
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyRequirements}
+              data-testid="copy-requirements-btn"
+              className="px-3 py-1 rounded-lg bg-[#C69C3A] hover:bg-[#D4AD47] text-[#081326] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>{reqCopied ? '✓ Requirements Copied!' : 'Copy requirements.txt'}</span>
+            </button>
+          </div>
+          <pre className="p-3 rounded-lg bg-slate-950/90 text-[11px] font-mono text-amber-200 overflow-x-auto max-h-48">
+            {MBEE_PROJECT_REQUIREMENTS_TEXT}
+          </pre>
+        </div>
+      )}
 
       {/* Collapsible Supabase SQL Schema Viewer (from /supabase.sql & /supabase/queries.sql) */}
       {showSqlSchema && (
@@ -461,8 +516,9 @@ export function AdminDashboard({
           filteredItems.map((item) => {
             const status: DocumentStatus = item.status || 'Pending';
             const cleanPhone = (item.userMobile || '').replace(/\D/g, '').slice(-10) || '8288837597';
+            const requiredDocs = getRequirementsForServiceTitle(item.serviceName, lang);
             const whatsappContactUrl = buildWhatsAppUrl(
-              `Hello ${item.userName}, this is Baljinder Singh & Manpreet Singh from M Bee Enterprises, Mahilpur regarding your "${item.serviceName}" submission (${item.referenceCode || item.id}). Current Status: ${status}.`,
+              `Hello ${item.userName}, this is Baljinder Singh & Manpreet Singh from M Bee Enterprises, Mahilpur regarding your "${item.serviceName}" submission (${item.referenceCode || item.id}). Current Status: ${status}. Required Documents: ${requiredDocs.slice(0, 3).join(', ')}.`,
               cleanPhone
             );
 
@@ -524,14 +580,37 @@ export function AdminDashboard({
                   </span>
                 </div>
 
-                {/* Middle Row: Service Name & Description */}
-                <div className="p-3 rounded-lg bg-white border border-slate-200/80 space-y-1">
+                {/* Middle Row: Service Name, Description & Required Documents (Requirements) */}
+                <div className="p-3 rounded-lg bg-white border border-slate-200/80 space-y-2">
                   <div className="text-xs font-bold text-[#0F213C]">
                     {item.serviceName}
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     {item.workDescription}
                   </p>
+                  {requiredDocs.length > 0 && (
+                    <div
+                      data-testid={`enquiry-requirements-${item.id}`}
+                      className="pt-2 border-t border-slate-100 space-y-1"
+                    >
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#8A6615]">
+                        {lang === 'en'
+                          ? 'Service Requirements (Required Documents):'
+                          : 'ਲੋੜੀਂਦੇ ਦਸਤਾਵੇਜ਼ (Service Requirements):'}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {requiredDocs.map((reqDoc, rIdx) => (
+                          <span
+                            key={rIdx}
+                            className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium inline-flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-[#8A6615] shrink-0" />
+                            <span>{reqDoc}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom Action Bar: Mark as Completed + Contact Customer (WhatsApp & Call) */}
