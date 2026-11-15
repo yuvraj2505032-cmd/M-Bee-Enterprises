@@ -271,8 +271,12 @@ test('summarizeEnquiriesForAdmin, Supabase SQL schema, and Requirements helpers 
   );
   assert.equal(MBEE_SUPABASE_TABLES.length, 6);
 
-  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('react==19.0.1'));
-  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('express==4.21.2'));
+  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('fastapi'));
+  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('uvicorn'));
+  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('supabase'));
+  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('python-dotenv'));
+  assert.ok(MBEE_PROJECT_REQUIREMENTS_TEXT.includes('google-genai'));
+  assert.ok(!MBEE_PROJECT_REQUIREMENTS_TEXT.includes('@google/genai'));
 
   const allServiceReqs = getAllServiceRequirements();
   assert.equal(allServiceReqs.length, 19);

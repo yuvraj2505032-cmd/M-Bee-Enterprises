@@ -80,40 +80,15 @@ SET status = 'Completed', updated_at = NOW()
 WHERE id = 'ENQ-SEED-101'
 RETURNING *;`;
 
-export const MBEE_PROJECT_REQUIREMENTS_TEXT = `# M Bee Enterprises – Complete Project Requirements (requirements.txt)
-# Proprietors: Baljinder Singh & Manpreet Singh · Mahilpur, Punjab 146105
-# Files: /requirements.txt | /frontend/requirements.txt | /backend/requirements.txt | /supabase/requirements.txt
-
-# [1] Runtime & Build Tools
-node>=20.0.0
-npm>=10.0.0
-bun>=1.1.0
-typescript==7.0.2
-tsx==4.21.0
-
-# [2] Frontend Dependencies (/frontend & /src)
-react==19.0.1
-react-dom==19.0.1
-vite==8.3.0
-@vitejs/plugin-react==6.1.1
-tailwindcss==4.3.3
-@tailwindcss/vite==4.3.3
-lucide-react==0.546.0
-motion==12.23.24
-firebase==13.2.0
-
-# [3] Backend Dependencies (/backend & /server.ts)
-express==4.21.2
-dotenv==17.2.3
-@google/genai==3.0.0
-
-# [4] Supabase & Cloud Environment Keys (.env / .env.example)
-SUPABASE_URL & VITE_SUPABASE_URL
-SUPABASE_ANON_KEY & VITE_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-GOOGLE_CLIENT_ID & VITE_GOOGLE_CLIENT_ID
-VITE_FIREBASE_PROJECT_ID & VITE_FIREBASE_API_KEY
-GEMINI_API_KEY, GROQ_API_KEY, TAVILY_API_KEY`;
+export const MBEE_PROJECT_REQUIREMENTS_TEXT = `fastapi
+uvicorn
+supabase
+python-dotenv
+google-genai
+groq
+tavily-python
+httpx
+pydantic`;
 
 export const MBEE_SUPABASE_TABLES = [
   'mbee_profiles',
