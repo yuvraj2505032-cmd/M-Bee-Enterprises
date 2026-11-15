@@ -15,6 +15,8 @@ export {
   fetchAnnouncementFromBackend,
   submitEnquiryToBackend,
   fetchEnquiriesFromBackend,
+  updateEnquiryStatusOnBackend,
+  summarizeEnquiriesForAdmin,
   syncDocumentsListWithBackend,
   syncDocumentStatusWithBackend,
   fetchProfilesFromBackend,
@@ -26,4 +28,5 @@ export type {
   AdvisorQueryResponse,
   BackendServicesResponse,
   BackendEnquiryRecord,
+  AdminEnquiriesSummary,
 } from '../src/utils/cloudIntegrations';

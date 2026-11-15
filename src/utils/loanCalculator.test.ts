@@ -203,6 +203,8 @@ test('parseCorsOrigins, formatSupabaseSyncPayload, and buildDeterministicAdvisor
 
 import { filterServicesBySearchQuery } from './loanCalculator';
 import { SERVICES_CATALOG } from '../data/translations';
+import { summarizeEnquiriesForAdmin } from './cloudIntegrations';
+import { MBEE_SUPABASE_SQL_SCHEMA, MBEE_SUPABASE_TABLES } from '../../supabase/supabaseClient';
 
 test('filterServicesBySearchQuery filters SERVICES_CATALOG in real-time by English, Punjabi, and checklist terms', () => {
   assert.equal(filterServicesBySearchQuery(SERVICES_CATALOG, '').length, 19);
@@ -218,5 +220,46 @@ test('filterServicesBySearchQuery filters SERVICES_CATALOG in real-time by Engli
 
   const noMatches = filterServicesBySearchQuery(SERVICES_CATALOG, 'xyz-nonexistent-service-999');
   assert.equal(noMatches.length, 0);
+});
+
+test('summarizeEnquiriesForAdmin and Supabase SQL schema work accurately', () => {
+  const summary = summarizeEnquiriesForAdmin([
+    {
+      id: 'ENQ-1',
+      userName: 'Gurpreet Singh',
+      userMobile: '9876543210',
+      serviceName: 'Passport Application Assistance',
+      workDescription: 'PSK booking',
+      status: 'Pending',
+      createdAt: '10:00 AM',
+    },
+    {
+      id: 'ENQ-2',
+      userName: 'Harjinder Kaur',
+      userMobile: '9814011223',
+      serviceName: 'Home Loan Assistance',
+      workDescription: 'Loan file',
+      status: 'Processing',
+      createdAt: '11:00 AM',
+    },
+    {
+      id: 'ENQ-3',
+      userName: 'Sukhdev Singh',
+      userMobile: '9417299881',
+      serviceName: 'PAN Card Services',
+      workDescription: 'PAN correction',
+      status: 'Completed',
+      createdAt: 'Yesterday',
+    },
+  ]);
+
+  assert.equal(summary.total, 3);
+  assert.equal(summary.pending, 1);
+  assert.equal(summary.processing, 1);
+  assert.equal(summary.completed, 1);
+
+  assert.ok(MBEE_SUPABASE_SQL_SCHEMA.includes('CREATE TABLE IF NOT EXISTS public.mbee_profiles'));
+  assert.ok(MBEE_SUPABASE_SQL_SCHEMA.includes('CREATE TABLE IF NOT EXISTS public.mbee_enquiries'));
+  assert.equal(MBEE_SUPABASE_TABLES.length, 5);
 });
 

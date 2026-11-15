@@ -384,7 +384,41 @@ export interface BackendEnquiryRecord {
   workDescription: string;
   preferredContact?: string;
   referenceCode?: string;
+  status?: SubmittedDocumentItem['status'];
   createdAt: string;
+}
+
+export interface AdminEnquiriesSummary {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+}
+
+export function summarizeEnquiriesForAdmin(
+  items: BackendEnquiryRecord[]
+): AdminEnquiriesSummary {
+  let pending = 0;
+  let processing = 0;
+  let completed = 0;
+
+  for (const item of items) {
+    const st = item.status || 'Pending';
+    if (st === 'Completed') {
+      completed += 1;
+    } else if (st === 'Processing') {
+      processing += 1;
+    } else {
+      pending += 1;
+    }
+  }
+
+  return {
+    total: items.length,
+    pending,
+    processing,
+    completed,
+  };
 }
 
 /**
@@ -423,6 +457,30 @@ export async function fetchEnquiriesFromBackend(): Promise<BackendEnquiryRecord[
     // ignore
   }
   return [];
+}
+
+/**
+ * Updates an enquiry's status (e.g. 'Completed', 'Processing', 'Pending') on the Backend (/api/enquiries/:id/status).
+ */
+export async function updateEnquiryStatusOnBackend(
+  id: string,
+  status: SubmittedDocumentItem['status']
+): Promise<BackendEnquiryRecord | null> {
+  if (!id) return null;
+  try {
+    const response = await fetch(`/api/enquiries/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as { enquiry?: BackendEnquiryRecord };
+      return data.enquiry || null;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
 
 /**

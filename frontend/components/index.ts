@@ -9,3 +9,4 @@ export * from '../../src/components/ServiceCardAndModal';
 export * from '../../src/components/InsuranceAndContact';
 export * from '../../src/components/UserAuthAndAdminDispatch';
 export * from '../../src/components/SmartServiceAdvisor';
+export * from '../../src/components/AdminDashboard';

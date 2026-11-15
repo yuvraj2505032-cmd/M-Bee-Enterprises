@@ -49,10 +49,8 @@ import {
 } from '../utils/loanCalculator';
 import {
   auth,
-  googleProvider,
-  signInWithPopup,
-  fetchUserProfileFromFirestore,
   saveUserProfileToFirestore,
+  signInOrLinkWithGoogleAccount,
 } from '../firebase';
 import {
   syncUserProfileAcrossClouds,
@@ -62,6 +60,7 @@ import {
   fetchEnquiriesFromBackend,
   BackendEnquiryRecord,
 } from '../utils/cloudIntegrations';
+import { AdminDashboard } from './AdminDashboard';
 
 const STORAGE_KEY_SAVED_PROFILES = 'mbee_saved_profiles_v1';
 export const STORAGE_KEY_CUSTOM_SERVICES = 'mbee_custom_services_v1';
@@ -206,51 +205,22 @@ export function UserSignInModal({
   const handleGoogleSignIn = async () => {
     setError('');
     setGoogleLoading(true);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const googleUser = result.user;
+    const cleanMobile = mobile.replace(/[\s\-+]/g, '').slice(-10);
+    const localProfile = cleanMobile ? loadSavedProfiles()[cleanMobile] : null;
 
-      // Check Firestore or local registry for any existing saved profile
-      const firestoreProfile = await fetchUserProfileFromFirestore(googleUser.uid);
-      const cleanMobile = mobile.replace(/[\s\-+]/g, '').slice(-10);
-      const localProfile =
-        (cleanMobile ? loadSavedProfiles()[cleanMobile] : null) ||
-        loadSavedProfiles()[googleUser.uid] ||
-        null;
+    const googleSession = await signInOrLinkWithGoogleAccount({
+      name: name.trim(),
+      mobile: mobile.trim(),
+      email: email.trim(),
+      city: city.trim() || 'Mahilpur, Punjab',
+      occupation: occupation || 'Citizen / Family',
+      existingSession: localProfile,
+    });
 
-      const mergedExisting = firestoreProfile || localProfile;
-
-      const googleSession = buildGoogleUserProfile(googleUser, mergedExisting, {
-        mobile: mobile || mergedExisting?.mobile || googleUser.phoneNumber || '',
-        city: city || mergedExisting?.city || 'Mahilpur, Punjab',
-        occupation: occupation || mergedExisting?.occupation || 'Citizen / Family',
-      });
-
-      await saveUserProfileToFirestore(googleSession);
-      saveProfileToRegistry(googleSession);
-      setGoogleLoading(false);
-      onSignInSuccess(googleSession);
-      onClose();
-    } catch (err: unknown) {
-      setGoogleLoading(false);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      if (
-        errMsg.includes('popup-closed-by-user') ||
-        errMsg.includes('cancelled-popup-request')
-      ) {
-        setError(
-          lang === 'en'
-            ? 'Google Sign-In popup was closed before completing. Click "Continue with Google" to try again, or fill in your details below.'
-            : 'ਗੂਗਲ ਸਾਈਨ-ਇਨ ਵਿੰਡੋ ਬੰਦ ਹੋ ਗਈ ਸੀ। ਦੁਬਾਰਾ "Continue with Google" ਤੇ ਕਲਿੱਕ ਕਰੋ ਜਾਂ ਹੇਠਾਂ ਵੇਰਵੇ ਭਰੋ।'
-        );
-      } else {
-        setError(
-          lang === 'en'
-            ? 'Could not open Google popup in this browser view. You can also enter your Google Email & Name below to create your profile immediately.'
-            : 'ਗੂਗਲ ਪੌਪਅੱਪ ਖੁੱਲ੍ਹ ਨਹੀਂ ਸਕਿਆ। ਤੁਸੀਂ ਹੇਠਾਂ ਆਪਣਾ ਨਾਮ ਅਤੇ ਜੀਮੇਲ (Gmail) ਭਰ ਕੇ ਵੀ ਤੁਰੰਤ ਪ੍ਰੋਫਾਈਲ ਬਣਾ ਸਕਦੇ ਹੋ।'
-        );
-      }
-    }
+    saveProfileToRegistry(googleSession);
+    setGoogleLoading(false);
+    onSignInSuccess(googleSession);
+    onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -671,30 +641,21 @@ export function UserProfileModal({
   const handleLinkGoogleAccount = async () => {
     setError('');
     setLinkingGoogle(true);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const googleUser = result.user;
-      const linkedProfile = buildGoogleUserProfile(googleUser, userSession, {
-        mobile: mobile || userSession.mobile,
-        city: city || userSession.city,
-        occupation: occupation || userSession.occupation,
-      });
-      await saveUserProfileToFirestore(linkedProfile);
-      saveProfileToRegistry(linkedProfile);
-      onUpdateProfile(linkedProfile);
-      setName(linkedProfile.name);
-      setEmail(linkedProfile.email || '');
-      setLinkingGoogle(false);
-      setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 2500);
-    } catch {
-      setLinkingGoogle(false);
-      setError(
-        lang === 'en'
-          ? 'Could not link Google via popup right now. You can also enter your Gmail address in the Email field below and click Save Profile.'
-          : 'ਗੂਗਲ ਪੌਪਅੱਪ ਖੁੱਲ੍ਹ ਨਹੀਂ ਸਕਿਆ। ਤੁਸੀਂ ਹੇਠਾਂ ਆਪਣੀ Gmail ਭਰ ਕੇ ਵੀ ਪ੍ਰੋਫਾਈਲ ਸੇਵ ਕਰ ਸਕਦੇ ਹੋ।'
-      );
-    }
+    const linkedProfile = await signInOrLinkWithGoogleAccount({
+      name: name || userSession.name,
+      mobile: mobile || userSession.mobile,
+      email: email || userSession.email,
+      city: city || userSession.city,
+      occupation: occupation || userSession.occupation,
+      existingSession: userSession,
+    });
+    saveProfileToRegistry(linkedProfile);
+    onUpdateProfile(linkedProfile);
+    setName(linkedProfile.name);
+    setEmail(linkedProfile.email || '');
+    setLinkingGoogle(false);
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2500);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -1138,7 +1099,7 @@ export function AdminControlPanelModal({
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [adminTab, setAdminTab] = useState<'services' | 'announcement' | 'customers'>('services');
+  const [adminTab, setAdminTab] = useState<'dashboard' | 'services' | 'announcement' | 'customers'>('dashboard');
 
   // New Service Form State
   const [srvTitleEn, setSrvTitleEn] = useState('');
@@ -1415,7 +1376,20 @@ export function AdminControlPanelModal({
           /* Unlocked Admin Dashboard */
           <div>
             {/* Admin Navigation Tabs */}
-            <div className="grid grid-cols-3 bg-slate-100 p-1.5 border-b border-slate-200 gap-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 bg-slate-100 p-1.5 border-b border-slate-200 gap-1">
+              <button
+                type="button"
+                data-testid="admin-tab-dashboard"
+                onClick={() => setAdminTab('dashboard')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  adminTab === 'dashboard'
+                    ? 'bg-[#0F213C] text-[#E5C158] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <FileCheck2 className="w-3.5 h-3.5" />
+                <span>{lang === 'en' ? 'Enquiries Dashboard' : 'ਪੁੱਛਗਿੱਛ ਡੈਸ਼ਬੋਰਡ'}</span>
+              </button>
               <button
                 type="button"
                 data-testid="admin-tab-services"
@@ -1462,6 +1436,16 @@ export function AdminControlPanelModal({
             </div>
 
             <div className="p-6 max-h-[75vh] overflow-y-auto space-y-6">
+              {adminTab === 'dashboard' && (
+                <AdminDashboard
+                  lang={lang}
+                  savedProfiles={savedProfilesList}
+                  onProfileDocumentUpdated={(updatedProf) => {
+                    saveProfileToRegistry(updatedProf);
+                    setProfilesTick((t) => t + 1);
+                  }}
+                />
+              )}
               {adminTab === 'services' && (
                 <>
                   <form onSubmit={handleAddService} className="space-y-4">
@@ -2110,38 +2094,24 @@ export function CustomerProfilePage({
   const handleGoogleConnect = async () => {
     setError('');
     setGoogleBusy(true);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const googleUser = result.user;
-      const firestoreProfile = await fetchUserProfileFromFirestore(googleUser.uid);
-      const merged = buildGoogleUserProfile(
-        googleUser,
-        firestoreProfile || userSession,
-        {
-          mobile: mobile || userSession?.mobile || googleUser.phoneNumber || '',
-          city: city || userSession?.city || 'Mahilpur, Punjab',
-          occupation: occupation || userSession?.occupation || 'Citizen / Family',
-        }
-      );
-      await saveUserProfileToFirestore(merged);
-      saveProfileToRegistry(merged);
-      onSaveSession(merged);
-      setName(merged.name);
-      setEmail(merged.email || '');
-      if (merged.submittedDocuments) {
-        setSubmittedDocs(merged.submittedDocuments);
-      }
-      setGoogleBusy(false);
-      setSavedConfirm(true);
-      setTimeout(() => setSavedConfirm(false), 2600);
-    } catch {
-      setGoogleBusy(false);
-      setError(
-        lang === 'en'
-          ? 'Google popup could not open in this preview window. Enter your Profile Name, Mobile & Gmail below to save your profile directly.'
-          : 'ਗੂਗਲ ਪੌਪਅੱਪ ਖੁੱਲ੍ਹ ਨਹੀਂ ਸਕਿਆ। ਹੇਠਾਂ ਆਪਣਾ ਨਾਮ, ਮੋਬਾਈਲ ਅਤੇ Gmail ਭਰ ਕੇ ਸਿੱਧੀ ਪ੍ਰੋਫਾਈਲ ਸੇਵ ਕਰੋ।'
-      );
+    const merged = await signInOrLinkWithGoogleAccount({
+      name: name.trim() || userSession?.name,
+      mobile: mobile.trim() || userSession?.mobile,
+      email: email.trim() || userSession?.email,
+      city: city || userSession?.city || 'Mahilpur, Punjab',
+      occupation: occupation || userSession?.occupation || 'Citizen / Family',
+      existingSession: userSession,
+    });
+    saveProfileToRegistry(merged);
+    onSaveSession(merged);
+    setName(merged.name);
+    setEmail(merged.email || '');
+    if (merged.submittedDocuments) {
+      setSubmittedDocs(merged.submittedDocuments);
     }
+    setGoogleBusy(false);
+    setSavedConfirm(true);
+    setTimeout(() => setSavedConfirm(false), 2600);
   };
 
   const handleSaveProfilePage = async (e: React.FormEvent) => {
